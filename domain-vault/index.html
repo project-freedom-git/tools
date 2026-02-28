@@ -36,6 +36,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code&family=Orbitron:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
+
+
+
+    
     <!-- Loading Indicator -->
     <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); display: flex; align-items: center; justify-content: center; z-index: 9999;">
         <div style="text-align: center;">
@@ -43,6 +47,12 @@
             <p style="margin-top: 20px; color: var(--text-main);">Loading Domain Vault...</p>
         </div>
     </div>
+
+
+
+
+
+    
 
     <!-- Auth UI will be injected here by JavaScript -->
     <div id="authContainer" style="display: none;"></div>
@@ -601,5 +611,18 @@
             document.getElementById('loading')?.style.display = 'none';
         });
     </script>
+
+    <!-- Quick fix to hide loading after 3 seconds if JS fails -->
+    <script>
+        setTimeout(function() {
+            document.getElementById('loading')?.style.display = 'none';
+        }, 3000);
+    </script>
+
+
+
+
+
+    
 </body>
 </html>
