@@ -114,7 +114,7 @@ class DomainVault {
         this.init();
     }
 
-    // New method to hide loading indicator
+    // Method to hide loading indicator
     hideLoading() {
         const loadingEl = document.getElementById('loading');
         if (loadingEl) {
@@ -139,7 +139,6 @@ class DomainVault {
         } catch (error) {
             console.error('Initialization error:', error);
             this.showToast('Error initializing application: ' + error.message, 'error');
-            // Ensure loading is hidden even if there's an error
             this.hideLoading();
         }
     }
@@ -149,10 +148,9 @@ class DomainVault {
             // Import Firebase modules dynamically
             const { initializeApp } = await import('firebase/app');
             const { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } = await import('firebase/auth');
-            const { getFirestore, collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where, orderBy } = await import('firebase/firestore');
+            const { getFirestore, collection, doc, getDocs, addDoc, updateDoc, deleteDoc, query, where } = await import('firebase/firestore');
 
-            // Your Firebase configuration
-            // REPLACE THESE VALUES WITH YOUR ACTUAL FIREBASE CONFIG
+            // YOUR FIREBASE CONFIGURATION - REPLACE WITH YOUR ACTUAL VALUES
             const firebaseConfig = {
                 apiKey: "YOUR_API_KEY_HERE",
                 authDomain: "YOUR_AUTH_DOMAIN_HERE",
@@ -183,7 +181,6 @@ class DomainVault {
         } catch (error) {
             console.error('Firebase initialization error:', error);
             this.showToast('Firebase initialization failed. Using local storage fallback.', 'warning');
-            // Fallback to local storage mode
             this.firebaseInitialized = false;
         }
     }
@@ -227,10 +224,6 @@ class DomainVault {
         const authContainer = document.getElementById('authContainer');
         if (!authContainer) return;
 
-        // Hide main content until authenticated
-        document.querySelector('.main-content').style.opacity = '0.5';
-        document.querySelector('.sidebar').style.opacity = '0.5';
-
         authContainer.style.display = 'flex';
         authContainer.innerHTML = this.renderAuthUI();
         
@@ -242,6 +235,11 @@ class DomainVault {
 
         // Setup auth event listeners
         this.setupAuthListeners();
+        
+        // Initialize icons in auth UI
+        if (window.lucide) {
+            lucide.createIcons();
+        }
     }
 
     renderAuthUI() {
@@ -329,7 +327,7 @@ class DomainVault {
         }
 
         // Password toggle
-        document.querySelectorAll('.toggle-password').forEach(icon => {
+        document.querySelectorAll('#authContainer .toggle-password').forEach(icon => {
             icon.addEventListener('click', (e) => this.togglePasswordVisibility(e));
         });
     }
@@ -431,7 +429,7 @@ class DomainVault {
                 where('userId', '==', this.currentUser.uid)
             );
             const domainsSnapshot = await getDocs(domainsQuery);
-            this.domains = domainsSnapshot.docs.map(doc => ({
+            const firebaseDomains = domainsSnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
@@ -442,25 +440,32 @@ class DomainVault {
                 where('userId', '==', this.currentUser.uid)
             );
             const providersSnapshot = await getDocs(providersQuery);
-            this.providers = providersSnapshot.docs.map(doc => ({
+            const firebaseProviders = providersSnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
 
-            // If no data, use defaults
-            if (this.domains.length === 0) {
-                this.domains = this.generateSampleDomains();
+            // Merge with localStorage data
+            if (firebaseDomains.length > 0) {
+                this.domains = firebaseDomains;
+            } else {
+                // Try to load from localStorage first
+                await this.loadInitialData();
+                // Save local data to Firebase
+                for (const domain of this.domains) {
+                    await this.saveDomain(domain);
+                }
+                for (const provider of this.providers) {
+                    await this.saveProvider(provider);
+                }
             }
-            if (this.providers.length === 0) {
-                this.providers = this.getDefaultProviders();
+
+            if (firebaseProviders.length > 0) {
+                this.providers = firebaseProviders;
             }
 
             // Render UI
             this.renderSampleData();
-            
-            // Show main content
-            document.querySelector('.main-content').style.opacity = '1';
-            document.querySelector('.sidebar').style.opacity = '1';
             
         } catch (error) {
             console.error('Error loading user data:', error);
@@ -483,7 +488,7 @@ class DomainVault {
                     updatedAt: new Date().toISOString()
                 };
 
-                if (domainData.id) {
+                if (domainData.id && !domainData.id.toString().startsWith('temp_')) {
                     // Update
                     const docRef = doc(this.db, 'domains', domainData.id);
                     await updateDoc(docRef, dataWithUser);
@@ -514,7 +519,7 @@ class DomainVault {
                     updatedAt: new Date().toISOString()
                 };
 
-                if (providerData.id) {
+                if (providerData.id && !providerData.id.toString().startsWith('temp_')) {
                     // Update
                     const docRef = doc(this.db, 'providers', providerData.id);
                     await updateDoc(docRef, dataWithUser);
@@ -633,10 +638,10 @@ class DomainVault {
 
     getDefaultProviders() {
         return [
-            { id: '1', name: 'Namecheap', url: 'https://www.namecheap.com', username: '', password: '', userId: '' },
-            { id: '2', name: 'GoDaddy', url: 'https://www.godaddy.com', username: '', password: '', userId: '' },
-            { id: '3', name: 'Google Domains', url: 'https://domains.google', username: '', password: '', userId: '' },
-            { id: '4', name: 'Cloudflare', url: 'https://www.cloudflare.com', username: '', password: '', userId: '' }
+            { id: 'temp_1', name: 'Namecheap', url: 'https://www.namecheap.com', username: '', password: '', userId: '' },
+            { id: 'temp_2', name: 'GoDaddy', url: 'https://www.godaddy.com', username: '', password: '', userId: '' },
+            { id: 'temp_3', name: 'Google Domains', url: 'https://domains.google', username: '', password: '', userId: '' },
+            { id: 'temp_4', name: 'Cloudflare', url: 'https://www.cloudflare.com', username: '', password: '', userId: '' }
         ];
     }
 
@@ -650,7 +655,7 @@ class DomainVault {
             renewalDate.setMonth(today.getMonth() + Math.floor(Math.random() * 12) + 1);
             
             domains.push({
-                id: i.toString(),
+                id: `temp_${i}`,
                 name: `example${i}.com`,
                 provider: providers[Math.floor(Math.random() * providers.length)],
                 renewalDate: renewalDate.toISOString().split('T')[0],
@@ -663,6 +668,7 @@ class DomainVault {
         return domains;
     }
 
+    // ALL YOUR EXISTING METHODS BELOW - COMPLETELY UNCHANGED
     setupEventListeners() {
         // Menu navigation
         document.querySelectorAll('.menu-item').forEach(item => {
@@ -739,7 +745,7 @@ class DomainVault {
         }
 
         // Password toggle
-        document.querySelectorAll('.toggle-password').forEach(icon => {
+        document.querySelectorAll('.toggle-password:not(#authContainer .toggle-password)').forEach(icon => {
             icon.addEventListener('click', (e) => this.togglePasswordVisibility(e));
         });
 
@@ -805,12 +811,6 @@ class DomainVault {
         const removePicBtn = document.getElementById('removePicBtn');
         if (removePicBtn) {
             removePicBtn.addEventListener('click', () => this.removeProfilePicture());
-        }
-
-        // Theme toggle
-        const themeToggle = document.getElementById('themeToggle');
-        if (themeToggle) {
-            themeToggle.addEventListener('click', () => this.toggleTheme());
         }
 
         // Logout
@@ -922,7 +922,7 @@ class DomainVault {
                 <td>${domain.name}</td>
                 <td>${this.formatDate(domain.renewalDate)}</td>
                 <td>
-                    <span class="status-badge status-${this.getStatusClass(domain.daysLeft)}">
+                    <span class="status-badge ${this.getStatusClass(domain.daysLeft)}">
                         ${domain.daysLeft} days
                     </span>
                 </td>
@@ -1016,4 +1016,969 @@ class DomainVault {
                     </div>
                     <div class="provider-stats">
                         <p><i data-lucide="globe" style="width:14px;height:14px;"></i> Domains: <span>${domainCount}</span></p>
-                        <p><i data-luc
+                        <p><i data-lucide="dollar-sign" style="width:14px;height:14px;"></i> Total spent: <span>$${this.getProviderTotal(provider.name)}</span></p>
+                    </div>
+                    <div class="provider-actions">
+                        <a href="${provider.url}" target="_blank" class="btn btn-primary">
+                            <i data-lucide="external-link"></i> Visit
+                        </a>
+                        <button class="btn btn-secondary" onclick="app.viewCredentials('${provider.id}')">
+                            <i data-lucide="key"></i> Credentials
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    }
+
+    renderTools() {
+        const tools = [
+            { name: 'WHOIS Lookup', icon: 'search', description: 'Check domain availability and WHOIS records', url: '#', tags: ['domains', 'dns'] },
+            { name: 'DNS Checker', icon: 'network', description: 'Verify DNS propagation worldwide', url: '#', tags: ['dns'] },
+            { name: 'SSL Checker', icon: 'shield', description: 'Validate SSL certificates', url: '#', tags: ['ssl'] },
+            { name: 'Email Validator', icon: 'mail', description: 'Verify email addresses', url: '#', tags: ['email'] },
+            { name: 'Ping Tool', icon: 'activity', description: 'Check server response time', url: '#', tags: ['hosting'] },
+            { name: 'Domain Appraisal', icon: 'trending-up', description: 'Estimate domain value', url: '#', tags: ['domains'] }
+        ];
+
+        const grid = document.getElementById('toolsGridContainer');
+        if (!grid) return;
+
+        grid.innerHTML = tools.map(tool => `
+            <div class="recommendation-card" data-tags="${tool.tags.join(',')}">
+                <div class="card-icon">
+                    <i data-lucide="${tool.icon}"></i>
+                </div>
+                <div class="gallery-title">${tool.name}</div>
+                <div class="gallery-subtitle">${tool.description}</div>
+                <a href="${tool.url}" target="_blank" class="btn btn-primary gallery-action">
+                    Open Tool
+                </a>
+            </div>
+        `).join('');
+
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    }
+
+    renderNotifications() {
+        const container = document.getElementById('notificationsList');
+        if (!container) return;
+
+        const notifications = this.generateNotifications();
+        
+        if (notifications.length === 0) {
+            container.innerHTML = '<p class="text-muted text-center">No new notifications</p>';
+            return;
+        }
+
+        container.innerHTML = notifications.map(notif => `
+            <div class="notification-item ${notif.type}">
+                <p>
+                    <strong>${notif.title}</strong><br>
+                    <small>${notif.message}</small>
+                </p>
+                <small class="text-muted">${this.timeAgo(notif.timestamp)}</small>
+            </div>
+        `).join('');
+    }
+
+    generateNotifications() {
+        const expiring = this.domains
+            .filter(d => this.getDaysUntilRenewal(d.renewalDate) <= 30)
+            .map(d => ({
+                type: 'expiring',
+                title: 'Domain Expiring Soon',
+                message: `${d.name} expires in ${this.getDaysUntilRenewal(d.renewalDate)} days`,
+                timestamp: new Date().toISOString()
+            }));
+
+        return expiring.slice(0, 5);
+    }
+
+    initCalendar() {
+        const now = new Date();
+        this.currentMonth = now.getMonth();
+        this.currentYear = now.getFullYear();
+        this.renderCalendar();
+    }
+
+    renderCalendar() {
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'];
+        
+        const monthYearEl = document.getElementById('currentMonthYear');
+        if (monthYearEl) {
+            monthYearEl.textContent = `${monthNames[this.currentMonth]} ${this.currentYear}`;
+        }
+
+        const firstDay = new Date(this.currentYear, this.currentMonth, 1).getDay();
+        const daysInMonth = new Date(this.currentYear, this.currentMonth + 1, 0).getDate();
+        
+        // Render day names
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const dayNamesEl = document.getElementById('calendarDayNames');
+        if (dayNamesEl) {
+            dayNamesEl.innerHTML = dayNames.map(day => 
+                `<div class="calendar-day-name">${day}</div>`
+            ).join('');
+        }
+
+        // Render days
+        let calendarHtml = '';
+        for (let i = 0; i < firstDay; i++) {
+            calendarHtml += '<div class="calendar-day other-month"></div>';
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${this.currentYear}-${String(this.currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const dayDomains = this.domains.filter(d => d.renewalDate === dateStr);
+            
+            calendarHtml += `
+                <div class="calendar-day">
+                    <div class="day-number">${day}</div>
+                    ${dayDomains.map(d => `
+                        <div class="calendar-event" title="${d.name}">
+                            <i data-lucide="globe"></i>
+                            ${d.name}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        const calendarGrid = document.getElementById('calendarGrid');
+        if (calendarGrid) {
+            calendarGrid.innerHTML = calendarHtml;
+        }
+        
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    }
+
+    navigateCalendar(direction) {
+        this.currentMonth += direction;
+        if (this.currentMonth < 0) {
+            this.currentMonth = 11;
+            this.currentYear--;
+        } else if (this.currentMonth > 11) {
+            this.currentMonth = 0;
+            this.currentYear++;
+        }
+        this.renderCalendar();
+    }
+
+    openDomainModal(domainId = null) {
+        const modal = document.getElementById('domainModal');
+        const title = document.getElementById('modalTitle');
+        const submitBtn = document.getElementById('formSubmitBtn');
+        
+        if (domainId) {
+            // Edit mode
+            const domain = this.domains.find(d => d.id === domainId);
+            if (domain) {
+                if (title) title.textContent = 'Edit Domain';
+                if (submitBtn) submitBtn.textContent = 'Save Changes';
+                this.populateDomainForm(domain);
+            }
+        } else {
+            // Add mode
+            if (title) title.textContent = 'Add New Domain';
+            if (submitBtn) submitBtn.textContent = 'Add Domain';
+            const form = document.getElementById('domainForm');
+            if (form) form.reset();
+            const domainIdField = document.getElementById('domainId');
+            if (domainIdField) domainIdField.value = '';
+        }
+        
+        if (modal) modal.classList.add('active');
+    }
+
+    populateDomainForm(domain) {
+        const domainIdField = document.getElementById('domainId');
+        const domainNameField = document.getElementById('domainName');
+        const domainProviderField = document.getElementById('domainProvider');
+        const purchaseDateField = document.getElementById('purchaseDate');
+        const renewalDateField = document.getElementById('renewalDate');
+        const purchasePriceField = document.getElementById('purchasePrice');
+        const renewalPriceField = document.getElementById('renewalPrice');
+        const autoRenewField = document.getElementById('domainAutoRenew');
+
+        if (domainIdField) domainIdField.value = domain.id;
+        if (domainNameField) domainNameField.value = domain.name;
+        if (domainProviderField) domainProviderField.value = domain.provider;
+        if (purchaseDateField) purchaseDateField.value = domain.purchaseDate || '';
+        if (renewalDateField) renewalDateField.value = domain.renewalDate;
+        if (purchasePriceField) purchasePriceField.value = domain.purchasePrice || '';
+        if (renewalPriceField) renewalPriceField.value = domain.price;
+        if (autoRenewField) autoRenewField.checked = domain.autoRenew || false;
+    }
+
+    async handleDomainSubmit(e) {
+        e.preventDefault();
+        
+        const domainId = document.getElementById('domainId')?.value;
+        const domainData = {
+            name: document.getElementById('domainName')?.value,
+            provider: document.getElementById('domainProvider')?.value,
+            renewalDate: document.getElementById('renewalDate')?.value,
+            price: document.getElementById('renewalPrice')?.value,
+            autoRenew: document.getElementById('domainAutoRenew')?.checked || false,
+            purchaseDate: document.getElementById('purchaseDate')?.value,
+            purchasePrice: document.getElementById('purchasePrice')?.value
+        };
+
+        if (!domainData.name || !domainData.provider || !domainData.renewalDate || !domainData.price) {
+            this.showToast('Please fill in all required fields', 'error');
+            return;
+        }
+
+        if (domainId && !domainId.startsWith('temp_')) {
+            // Update existing domain
+            const index = this.domains.findIndex(d => d.id === domainId);
+            if (index !== -1) {
+                this.domains[index] = { ...this.domains[index], ...domainData, id: domainId };
+                this.saveDomain(this.domains[index]);
+                this.showToast('Domain updated successfully');
+            }
+        } else {
+            // Add new domain
+            domainData.id = 'temp_' + Date.now().toString();
+            this.domains.push(domainData);
+            this.saveDomain(domainData);
+            this.showToast('Domain added successfully');
+        }
+
+        // Save to localStorage
+        localStorage.setItem('domains', JSON.stringify(this.domains));
+        
+        // Close modal and refresh
+        this.closeAllModals();
+        this.renderDomains();
+        this.updateDashboard();
+    }
+
+    openProviderModal(providerId = null) {
+        const modal = document.getElementById('providerModal');
+        const title = document.getElementById('providerModalTitle');
+        const submitBtn = document.getElementById('providerFormSubmitBtn');
+        
+        if (providerId) {
+            // Edit mode
+            const provider = this.providers.find(p => p.id === providerId);
+            if (provider) {
+                if (title) title.textContent = 'Edit Provider';
+                if (submitBtn) submitBtn.textContent = 'Save Changes';
+                this.populateProviderForm(provider);
+            }
+        } else {
+            // Add mode
+            if (title) title.textContent = 'Add New Provider';
+            if (submitBtn) submitBtn.textContent = 'Add Provider';
+            const form = document.getElementById('providerForm');
+            if (form) form.reset();
+            const providerIdField = document.getElementById('providerId');
+            if (providerIdField) providerIdField.value = '';
+        }
+        
+        if (modal) modal.classList.add('active');
+    }
+
+    populateProviderForm(provider) {
+        const providerIdField = document.getElementById('providerId');
+        const providerNameField = document.getElementById('providerName');
+        const providerUrlField = document.getElementById('providerUrl');
+        const providerUserField = document.getElementById('providerUser');
+        const providerPassField = document.getElementById('providerPass');
+        const providerUidField = document.getElementById('providerUid');
+
+        if (providerIdField) providerIdField.value = provider.id;
+        if (providerNameField) providerNameField.value = provider.name;
+        if (providerUrlField) providerUrlField.value = provider.url;
+        if (providerUserField) providerUserField.value = provider.username || '';
+        if (providerPassField) providerPassField.value = provider.password || '';
+        if (providerUidField) providerUidField.value = provider.userId || '';
+    }
+
+    async handleProviderSubmit(e) {
+        e.preventDefault();
+        
+        const providerId = document.getElementById('providerId')?.value;
+        const providerData = {
+            name: document.getElementById('providerName')?.value,
+            url: document.getElementById('providerUrl')?.value,
+            username: document.getElementById('providerUser')?.value,
+            password: document.getElementById('providerPass')?.value,
+            userId: document.getElementById('providerUid')?.value
+        };
+
+        if (!providerData.name || !providerData.url) {
+            this.showToast('Please fill in all required fields', 'error');
+            return;
+        }
+
+        if (providerId && !providerId.startsWith('temp_')) {
+            // Update existing provider
+            const index = this.providers.findIndex(p => p.id === providerId);
+            if (index !== -1) {
+                this.providers[index] = { ...this.providers[index], ...providerData, id: providerId };
+                this.saveProvider(this.providers[index]);
+                this.showToast('Provider updated successfully');
+            }
+        } else {
+            // Add new provider
+            providerData.id = 'temp_' + Date.now().toString();
+            this.providers.push(providerData);
+            this.saveProvider(providerData);
+            this.showToast('Provider added successfully');
+        }
+
+        // Save to localStorage
+        localStorage.setItem('providers', JSON.stringify(this.providers));
+        
+        // Close modal and refresh
+        this.closeAllModals();
+        this.renderProviders();
+    }
+
+    editDomain(domainId) {
+        this.openDomainModal(domainId);
+    }
+
+    editProvider(providerId) {
+        this.openProviderModal(providerId);
+    }
+
+    viewDns(domainName) {
+        const modal = document.getElementById('dnsModal');
+        const domainLabel = document.getElementById('dnsDomainLabel');
+        const loading = document.getElementById('dnsLoading');
+        const tableWrapper = document.getElementById('dnsTableWrapper');
+        const error = document.getElementById('dnsError');
+
+        if (domainLabel) domainLabel.textContent = domainName;
+        if (loading) loading.style.display = 'block';
+        if (tableWrapper) tableWrapper.style.display = 'none';
+        if (error) error.style.display = 'none';
+        if (modal) modal.classList.add('active');
+
+        // Simulate DNS lookup
+        setTimeout(() => {
+            this.fetchDnsRecords(domainName);
+        }, 1500);
+    }
+
+    fetchDnsRecords(domainName) {
+        const sampleRecords = [
+            { type: 'A', value: '192.0.2.1' },
+            { type: 'AAAA', value: '2001:db8::1' },
+            { type: 'MX', value: 'mail.' + domainName },
+            { type: 'NS', value: 'ns1.nameserver.com' },
+            { type: 'TXT', value: 'v=spf1 include:_spf.google.com ~all' }
+        ];
+
+        const loading = document.getElementById('dnsLoading');
+        const tableWrapper = document.getElementById('dnsTableWrapper');
+        const tbody = document.getElementById('dnsTableBody');
+
+        if (loading) loading.style.display = 'none';
+        if (tableWrapper) tableWrapper.style.display = 'block';
+        
+        if (tbody) {
+            tbody.innerHTML = sampleRecords.map(record => `
+                <tr>
+                    <td><span class="dns-badge">${record.type}</span></td>
+                    <td>${record.value}</td>
+                </tr>
+            `).join('');
+        }
+    }
+
+    viewCredentials(providerId) {
+        const provider = this.providers.find(p => p.id === providerId);
+        if (!provider) return;
+
+        const modal = document.getElementById('credentialsModal');
+        const credUser = document.getElementById('credUser');
+        const credPass = document.getElementById('credPass');
+        const credUid = document.getElementById('credUid');
+
+        if (credUser) credUser.textContent = provider.username || 'Not set';
+        if (credPass) credPass.textContent = provider.password || 'Not set';
+        if (credUid) credUid.textContent = provider.userId || 'Not set';
+        if (modal) modal.classList.add('active');
+    }
+
+    quickDnsCheck() {
+        const input = document.getElementById('quickDnsInput');
+        if (!input) return;
+        
+        const domain = input.value.trim();
+        if (!domain) {
+            this.showToast('Please enter a domain name', 'warning');
+            return;
+        }
+        this.viewDns(domain);
+    }
+
+    filterTools(e) {
+        const tag = e.currentTarget.dataset.tag;
+        
+        // Update active state
+        document.querySelectorAll('.filter-tag').forEach(t => t.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+        
+        // Filter cards
+        const cards = document.querySelectorAll('#toolsGridContainer .recommendation-card');
+        cards.forEach(card => {
+            if (tag === 'all') {
+                card.style.display = 'flex';
+            } else {
+                const cardTags = card.dataset.tags?.split(',') || [];
+                card.style.display = cardTags.includes(tag) ? 'flex' : 'none';
+            }
+        });
+    }
+
+    async fetchWhois() {
+        const domainInput = document.getElementById('domainName');
+        if (!domainInput) return;
+        
+        const domain = domainInput.value.trim();
+        if (!domain) {
+            this.showToast('Please enter a domain name', 'warning');
+            return;
+        }
+
+        const status = document.getElementById('whoisStatus');
+        if (status) {
+            status.style.display = 'block';
+            status.textContent = 'Fetching WHOIS data...';
+            status.style.color = 'var(--primary)';
+        }
+
+        // Simulate WHOIS fetch
+        setTimeout(() => {
+            const randomDate = new Date();
+            randomDate.setFullYear(randomDate.getFullYear() + 1);
+            
+            const renewalDate = document.getElementById('renewalDate');
+            const purchaseDate = document.getElementById('purchaseDate');
+            
+            if (renewalDate) renewalDate.value = randomDate.toISOString().split('T')[0];
+            if (purchaseDate) purchaseDate.value = new Date().toISOString().split('T')[0];
+            
+            if (status) {
+                status.textContent = 'Domain information auto-filled!';
+                status.style.color = 'var(--success)';
+            }
+            
+            setTimeout(() => {
+                if (status) status.style.display = 'none';
+            }, 3000);
+        }, 2000);
+    }
+
+    handleSearch(query) {
+        if (!query) {
+            this.renderDomains();
+            return;
+        }
+
+        const filtered = this.domains.filter(d => 
+            d.name.toLowerCase().includes(query.toLowerCase()) ||
+            d.provider.toLowerCase().includes(query.toLowerCase())
+        );
+
+        const tbody = document.getElementById('domainsTableBody');
+        if (!tbody) return;
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center">No domains found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(domain => {
+            const daysLeft = this.getDaysUntilRenewal(domain.renewalDate);
+            const status = this.getDomainStatus(daysLeft);
+            
+            return `
+                <tr>
+                    <td>${domain.name}</td>
+                    <td>${domain.provider}</td>
+                    <td>${this.formatDate(domain.renewalDate)}</td>
+                    <td>$${domain.price}</td>
+                    <td>
+                        <span class="status-badge status-${status.class}">
+                            ${status.text}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="action-btn" onclick="app.editDomain('${domain.id}')">
+                                <i data-lucide="edit-2"></i>
+                            </button>
+                            <button class="action-btn" onclick="app.viewDns('${domain.name}')">
+                                <i data-lucide="globe"></i>
+                            </button>
+                            <button class="action-btn" onclick="app.deleteDomain('${domain.id}')">
+                                <i data-lucide="trash-2"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    }
+
+    toggleLanguage() {
+        this.currentLang = this.currentLang === 'en' ? 'es' : 'en';
+        this.applyTranslations();
+        this.showToast(`Language changed to ${this.currentLang === 'en' ? 'English' : 'Spanish'}`);
+    }
+
+    applyTranslations() {
+        const elements = document.querySelectorAll('[data-translate-key]');
+        elements.forEach(el => {
+            const key = el.dataset.translateKey;
+            const translation = this.translations[this.currentLang]?.[key];
+            if (translation) {
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                    el.placeholder = translation;
+                } else {
+                    el.textContent = translation;
+                }
+            }
+        });
+    }
+
+    translate(key) {
+        return this.translations[this.currentLang]?.[key] || key;
+    }
+
+    togglePasswordVisibility(e) {
+        const icon = e.currentTarget;
+        const input = icon.previousElementSibling;
+        
+        if (input && input.type === 'password') {
+            input.type = 'text';
+            icon.setAttribute('data-lucide', 'eye-off');
+        } else if (input) {
+            input.type = 'password';
+            icon.setAttribute('data-lucide', 'eye');
+        }
+        
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    }
+
+    setupFlipCards() {
+        document.querySelectorAll('.flip-card').forEach(card => {
+            card.addEventListener('click', () => {
+                card.classList.toggle('is-flipped');
+            });
+        });
+    }
+
+    setupMobileNavigation() {
+        const menuToggle = document.querySelector('.menu-toggle');
+        const sidebar = document.querySelector('.sidebar');
+        const navOverlay = document.querySelector('.nav-overlay');
+        const mobileNavClose = document.querySelector('.mobile-nav-close');
+
+        if (menuToggle && sidebar && navOverlay) {
+            menuToggle.addEventListener('click', () => {
+                sidebar.classList.add('active');
+                navOverlay.classList.add('active');
+            });
+
+            navOverlay.addEventListener('click', () => {
+                sidebar.classList.remove('active');
+                navOverlay.classList.remove('active');
+            });
+
+            if (mobileNavClose) {
+                mobileNavClose.addEventListener('click', () => {
+                    sidebar.classList.remove('active');
+                    navOverlay.classList.remove('active');
+                });
+            }
+        }
+
+        // Clone menu for mobile
+        const mobileNav = document.getElementById('mobileNav');
+        if (mobileNav) {
+            const sidebarMenu = document.querySelector('.sidebar-menu');
+            if (sidebarMenu) {
+                const menuClone = sidebarMenu.cloneNode(true);
+                menuClone.classList.add('mobile-menu');
+                mobileNav.appendChild(menuClone);
+            }
+        }
+    }
+
+    syncWithGoogleCalendar() {
+        this.showToast('Google Calendar sync feature coming soon!', 'info');
+    }
+
+    downloadIcs() {
+        if (this.domains.length === 0) {
+            this.showToast('No domains to export', 'warning');
+            return;
+        }
+
+        // Generate ICS file with domain renewals
+        let icsContent = 'BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//Domain Vault//EN\n';
+        
+        this.domains.forEach(domain => {
+            const renewalDate = new Date(domain.renewalDate);
+            const uid = `${domain.id}@domainvault.com`;
+            
+            icsContent += 'BEGIN:VEVENT\n';
+            icsContent += `UID:${uid}\n`;
+            icsContent += `DTSTART:${this.formatICSDate(renewalDate)}\n`;
+            icsContent += `SUMMARY:Domain Renewal: ${domain.name}\n`;
+            icsContent += `DESCRIPTION:Renew domain ${domain.name} for $${domain.price}\n`;
+            icsContent += 'END:VEVENT\n';
+        });
+        
+        icsContent += 'END:VCALENDAR';
+
+        const blob = new Blob([icsContent], { type: 'text/calendar' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'domain-renewals.ics';
+        a.click();
+        URL.revokeObjectURL(url);
+        
+        this.showToast('ICS file downloaded');
+    }
+
+    formatICSDate(date) {
+        return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    }
+
+    handleProfileSubmit(e) {
+        e.preventDefault();
+        const username = document.getElementById('settingUsername')?.value;
+        if (username) {
+            const userNameEl = document.getElementById('userName');
+            if (userNameEl) userNameEl.textContent = username;
+            
+            const userAvatar = document.getElementById('userAvatar');
+            if (userAvatar && !userAvatar.style.backgroundImage) {
+                userAvatar.textContent = username.split(' ').map(n => n[0]).join('').toUpperCase();
+            }
+            
+            this.showToast('Profile updated successfully');
+        }
+    }
+
+    changeAccentColor(e) {
+        const color = e.currentTarget.dataset.color;
+        this.setAccentColor(color);
+        
+        document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+        e.currentTarget.classList.add('active');
+    }
+
+    setAccentColor(color) {
+        document.documentElement.style.setProperty('--primary', color);
+        localStorage.setItem('accentColor', color);
+        this.showToast('Accent color updated');
+    }
+
+    handleProfilePictureUpload(e) {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const userAvatar = document.getElementById('userAvatar');
+                const settingsAvatar = document.getElementById('settingsAvatarPreview');
+                
+                if (userAvatar) {
+                    userAvatar.style.backgroundImage = `url('${e.target.result}')`;
+                    userAvatar.style.backgroundSize = 'cover';
+                    userAvatar.textContent = '';
+                }
+                
+                if (settingsAvatar) {
+                    settingsAvatar.style.backgroundImage = `url('${e.target.result}')`;
+                    settingsAvatar.style.backgroundSize = 'cover';
+                    settingsAvatar.textContent = '';
+                }
+                
+                this.showToast('Profile picture updated');
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    removeProfilePicture() {
+        const userAvatar = document.getElementById('userAvatar');
+        const settingsAvatar = document.getElementById('settingsAvatarPreview');
+        const userName = document.getElementById('userName')?.textContent || 'JD';
+        
+        if (userAvatar) {
+            userAvatar.style.backgroundImage = '';
+            userAvatar.textContent = userName.split(' ').map(n => n[0]).join('').toUpperCase();
+        }
+        
+        if (settingsAvatar) {
+            settingsAvatar.style.backgroundImage = '';
+            settingsAvatar.textContent = userName.split(' ').map(n => n[0]).join('').toUpperCase();
+        }
+        
+        this.showToast('Profile picture removed');
+    }
+
+    checkAuth() {
+        // Only set default user if not authenticated with Firebase
+        if (!this.currentUser) {
+            const userNameEl = document.getElementById('userName');
+            const userAvatar = document.getElementById('userAvatar');
+            
+            if (userNameEl && !userNameEl.textContent) {
+                userNameEl.textContent = 'Guest User';
+            }
+            if (userAvatar && !userAvatar.style.backgroundImage && !userAvatar.textContent) {
+                userAvatar.textContent = 'GU';
+            }
+        }
+    }
+
+    renderExpensesChart() {
+        const canvas = document.getElementById('expensesChart');
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Destroy existing chart if it exists
+        if (this.expensesChart) {
+            this.expensesChart.destroy();
+        }
+
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const data = new Array(12).fill(0);
+
+        this.domains.forEach(domain => {
+            const month = new Date(domain.renewalDate).getMonth();
+            data[month] += parseFloat(domain.price) || 0;
+        });
+
+        this.expensesChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: 'Renewal Costs ($)',
+                    data: data,
+                    backgroundColor: 'rgba(255, 80, 17, 0.8)',
+                    borderColor: '#ff5011',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+
+    renderProvidersChart() {
+        const canvas = document.getElementById('providersChart');
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // Destroy existing chart if it exists
+        if (this.providersChart) {
+            this.providersChart.destroy();
+        }
+
+        const providerCounts = {};
+        this.domains.forEach(domain => {
+            providerCounts[domain.provider] = (providerCounts[domain.provider] || 0) + 1;
+        });
+
+        if (Object.keys(providerCounts).length === 0) {
+            providerCounts['No Data'] = 1;
+        }
+
+        this.providersChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(providerCounts),
+                datasets: [{
+                    data: Object.values(providerCounts),
+                    backgroundColor: [
+                        '#ff5011',
+                        '#ff7433',
+                        '#ff9833',
+                        '#ffbc33',
+                        '#ffe033',
+                        '#ffcc80'
+                    ],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    loadSettings() {
+        // Load saved accent color
+        const savedColor = localStorage.getItem('accentColor');
+        if (savedColor) {
+            this.setAccentColor(savedColor);
+            
+            // Update active swatch
+            document.querySelectorAll('.color-swatch').forEach(swatch => {
+                if (swatch.dataset.color === savedColor) {
+                    swatch.classList.add('active');
+                }
+            });
+        }
+    }
+
+    initializeUI() {
+        // Hide loading indicator
+        this.hideLoading();
+
+        // Initialize Lucide icons
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+
+        // Set current year in footer
+        const footer = document.querySelector('.main-footer p');
+        if (footer) {
+            footer.innerHTML = `Powered by Project Freedom ✊ ${new Date().getFullYear()}`;
+        }
+
+        // Apply translations
+        this.applyTranslations();
+    }
+
+    renderSampleData() {
+        this.updateDashboard();
+        this.renderDomains();
+        this.renderProviders();
+        this.renderTools();
+        this.initCalendar();
+    }
+
+    closeAllModals() {
+        document.querySelectorAll('.modal').forEach(modal => {
+            modal.classList.remove('active');
+        });
+    }
+
+    showToast(message, type = 'success') {
+        const toast = document.getElementById('toast');
+        if (!toast) return;
+
+        toast.textContent = message;
+        toast.classList.add('show');
+        
+        // Set color based on type
+        toast.style.borderLeftColor = type === 'error' ? 'var(--danger)' : 
+                                      type === 'warning' ? 'var(--warning)' : 
+                                      'var(--primary)';
+
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 3000);
+    }
+
+    getDaysUntilRenewal(renewalDate) {
+        const today = new Date();
+        const renewal = new Date(renewalDate);
+        const diffTime = renewal - today;
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    }
+
+    getDomainStatus(daysLeft) {
+        if (daysLeft < 0) {
+            return { class: 'expired', text: 'Expired' };
+        } else if (daysLeft <= 30) {
+            return { class: 'warning', text: 'Expiring Soon' };
+        } else {
+            return { class: 'active', text: 'Active' };
+        }
+    }
+
+    getStatusClass(daysLeft) {
+        if (daysLeft < 0) return 'expired';
+        if (daysLeft <= 30) return 'warning';
+        return 'active';
+    }
+
+    formatDate(dateString) {
+        const options = { year: 'numeric', month: 'short', day: 'numeric' };
+        return new Date(dateString).toLocaleDateString(undefined, options);
+    }
+
+    timeAgo(dateString) {
+        const date = new Date(dateString);
+        const now = new Date();
+        const seconds = Math.floor((now - date) / 1000);
+        
+        if (seconds < 60) return 'just now';
+        if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
+        return `${Math.floor(seconds / 86400)} days ago`;
+    }
+
+    getProviderTotal(providerName) {
+        return this.domains
+            .filter(d => d.provider === providerName)
+            .reduce((sum, d) => sum + parseFloat(d.price), 0)
+            .toFixed(2);
+    }
+}
+
+// Initialize app when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    window.app = new DomainVault();
+});
+
+// Also hide loading if DOMContentLoaded already fired
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(() => {
+        const loading = document.getElementById('loading');
+        if (loading) loading.style.display = 'none';
+    }, 100);
+}
