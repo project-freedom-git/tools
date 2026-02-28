@@ -1,4 +1,4 @@
-<script type="module">
+
   // ---------- Firebase Imports & Initialization ----------
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
   import {
@@ -350,4 +350,4 @@
     // Initially hide main app (it will be shown after login)
     document.getElementById('app').style.display = 'none';
   });
-</script>
+
