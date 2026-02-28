@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Domain Vault - Secure Domain Portfolio Manager</title>
+    
+    <!-- Meta tags for better SEO and sharing -->
+    <meta name="description" content="Secure Domain Portfolio Manager - Manage all your domains in one place">
+    <meta name="theme-color" content="#ff5011">
+    
+    <!-- Import Map for Firebase (must come before your script) -->
+    <script type="importmap">
+        {
+            "imports": {
+                "firebase/app": "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js",
+                "firebase/auth": "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js",
+                "firebase/firestore": "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"
+            }
+        }
+    </script>
+    
+    <!-- Your CSS -->
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Lucide icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Favicon -->
+    <link rel="icon" href="https://bucket.mlcdn.com/a/3336/3336910/images/524bf1f1731bc1e9a78fb265c480b6b1bf1a3e89.png">
+    
+    <!-- Fonts (optional) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fira+Code&family=Orbitron:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Loading Indicator -->
+    <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); display: flex; align-items: center; justify-content: center; z-index: 9999;">
+        <div style="text-align: center;">
+            <i data-lucide="loader-2" class="lucide-spin" style="width: 48px; height: 48px; color: var(--primary);"></i>
+            <p style="margin-top: 20px; color: var(--text-main);">Loading Domain Vault...</p>
+        </div>
+    </div>
+
+    <!-- Auth UI will be injected here by JavaScript -->
+    <div id="authContainer" style="display: none;"></div>
+    
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="sidebar" id="sidebar-navigation">
+        <div style="display: flex; flex-direction: column; height: 100%;">
+            
+            <!-- Logo & Title -->
+            <div class="sidebar-brand">
+                <div class="logo-container">
+                    <img id="defaultBrandLogo" src="https://bucket.mlcdn.com/a/3336/3336910/images/524bf1f1731bc1e9a78fb265c480b6b1bf1a3e89.png" alt="Dashboard Logo">
+                    <div id="themeBrandLogoWrapper" style="display: none; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--primary); filter: drop-shadow(0 0 10px var(--primary));">
+                        <i data-lucide="vault" style="width: 85%; height: 85%; stroke-width: 1.5;"></i>
+                    </div>
+                </div>
+                <h1 data-translate-key="brandName">DOMAIN VAULT</h1>
+                <p data-translate-key="brandSlogan">Secure Domain Portfolio Manager</p>
+            </div>
+
+            <div class="sidebar-menu">
+                <div class="menu-item active" data-page="dashboard">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span data-translate-key="dashboard">Dashboard</span>
+                </div>
+                <div class="menu-item" data-page="domains">
+                    <i data-lucide="globe"></i>
+                    <span data-translate-key="allDomains">All Domains</span>
+                </div>
+                <div class="menu-item" data-page="providers">
+                    <i data-lucide="server"></i>
+                    <span data-translate-key="domainProviders">Domain Providers</span>
+                </div>
+                <div class="menu-item" data-page="tools">
+                    <i data-lucide="wrench"></i>
+                    <span data-translate-key="toolsResources">Tools & Resources</span>
+                </div>
+                <div class="menu-item" data-page="calendar">
+                    <i data-lucide="calendar"></i>
+                    <span data-translate-key="calendar">Calendar</span>
+                </div>
+                <div class="menu-item" data-page="notifications">
+                    <i data-lucide="bell"></i>
+                    <span data-translate-key="notifications">Notifications</span>
+                    <span class="notification-badge"></span>
+                </div>
+                <div class="menu-item" data-page="settings">
+                    <i data-lucide="settings"></i>
+                    <span data-translate-key="settings">Settings</span>
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                >_ Version 2.0.0 (Dark/Light)
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Header -->
+        <div class="top-header">
+            <div class="menu-toggle">
+                <i data-lucide="menu"></i>
+            </div>
+            <div class="search-box">
+                <i data-lucide="search"></i>
+                <input type="text" data-translate-key="searchPlaceholder" placeholder="Search domains..." id="searchInput">
+            </div>
+            <div class="user-profile">
+                <div class="header-icon" id="translateBtn" title="Translate to Spanish/English">
+                    <i data-lucide="languages"></i>
+                </div>
+                <div class="header-icon" id="themeToggle" title="Toggle theme">
+                    <i data-lucide="moon"></i>
+                </div>
+                <div class="header-icon" id="headerNotificationIcon">
+                    <i data-lucide="bell"></i>
+                    <span class="notification-badge header-badge"></span>
+                </div>
+                <div class="user-avatar" id="userAvatar">JD</div>
+                <div class="user-name" id="userName">John Doe</div>
+            </div>
+        </div>
+
+        <!-- Content Area -->
+        <div class="content">
+            <!-- Dashboard Page -->
+            <div id="page-dashboard" class="page active">
+                <div class="page-title">
+                    <h2 data-translate-key="dashboardOverview">Dashboard Overview</h2>
+                    <button class="btn btn-primary" id="addDomainBtn">
+                        <i data-lucide="plus"></i> <span data-translate-key="addNewDomain">Add New Domain</span>
+                    </button>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon"><i data-lucide="globe"></i></div>
+                        <div class="stat-value" id="stat-total-domains">0</div>
+                        <div class="stat-label" data-translate-key="totalDomains">Total Domains</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i data-lucide="server"></i></div>
+                        <div class="stat-value" id="stat-domain-providers">0</div>
+                        <div class="stat-label" data-translate-key="domainProviders">Domain Providers</div>
+                    </div>
+                    <div class="stat-card flip-card" id="cost-card">
+                        <div class="flip-card-inner">
+                            <div class="flip-card-front">
+                                <div class="stat-icon"><i data-lucide="wallet"></i></div>
+                                <div class="stat-value" id="stat-yearly-expenses">$0.00</div>
+                                <div class="stat-label" data-translate-key="annualCost">Annual Cost</div>
+                            </div>
+                            <div class="flip-card-back">
+                                <div class="stat-icon"><i data-lucide="piggy-bank"></i></div>
+                                <div class="stat-value" id="stat-total-investment">$0.00</div>
+                                <div class="stat-label" data-translate-key="totalInvestment">Total Investment</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon"><i data-lucide="timer"></i></div>
+                        <div class="stat-value" id="stat-expiring-soon">0</div>
+                        <div class="stat-label" data-translate-key="expiringSoon">Expiring Soon</div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="charts-container">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title" data-translate-key="renewalCostsByMonth">Renewal Costs by Month</div>
+                        </div>
+                        <canvas id="expensesChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="card-title" data-translate-key="providersDistribution">Providers Distribution</div>
+                        </div>
+                        <canvas id="providersChart" style="max-height: 300px;"></canvas>
+                    </div>
+                </div>
+
+                <!-- Top 5 Urgent Renewals -->
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <div class="card-title" data-translate-key="urgentRenewals">Top 5 Urgent Renewals</div>
+                    </div>
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-translate-key="domainName">Domain Name</th>
+                                    <th data-translate-key="renewalDate">Renewal Date</th>
+                                    <th data-translate-key="daysLeft">Days Left</th>
+                                    <th data-translate-key="price">Price</th>
+                                </tr>
+                            </thead>
+                            <tbody id="urgentRenewalsBody">
+                                <!-- JS will populate this -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- All Domains Page -->
+            <div id="page-domains" class="page">
+                <div class="page-title">
+                    <h2 data-translate-key="allDomains">All Domains</h2>
+                    <button class="btn btn-primary" id="addDomainBtnSecondary">
+                        <i data-lucide="plus"></i> <span data-translate-key="addNewDomain">Add New Domain</span>
+                    </button>
+                </div>
+                <div class="card">
+                    <div class="table-responsive">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th data-translate-key="domainName">Domain Name</th>
+                                    <th data-translate-key="provider">Provider</th>
+                                    <th data-translate-key="renewalDate">Renewal Date</th>
+                                    <th data-translate-key="price">Price</th>
+                                    <th data-translate-key="status">Status</th>
+                                    <th data-translate-key="actions">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="domainsTableBody">
+                                <!-- JS will populate this -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Providers Page -->
+            <div id="page-providers" class="page">
+                <div class="page-title">
+                    <h2 data-translate-key="domainProviders">Domain Providers</h2>
+                    <button class="btn btn-primary" id="addProviderBtn">
+                        <i data-lucide="plus"></i> <span data-translate-key="addNewProvider">Add New Provider</span>
+                    </button>
+                </div>
+                
+                <div class="providers-grid" id="providersGrid">
+                    <!-- Provider cards will be injected here by JS -->
+                </div>
+                
+                <!-- Promotional Banner -->
+                <a href="https://namecheap.pxf.io/bebelldigitalsolutions" target="_blank" class="provider-banner-link" id="providerPromoBanner">
+                    <img src="https://bucket.mlcdn.com/a/3336/3336910/images/63cbab869ab6b2aa44cdb6d95f760c7cd1dddef3.png" alt="Promotional Banner" class="provider-banner-img">
+                </a>
+            </div>
+
+            <!-- Tools & Resources Page -->
+            <div id="page-tools" class="page">
+                <div class="page-title">
+                    <h2 data-translate-key="toolsResources">Tools & Resources</h2>
+                </div>
+                
+                <!-- Quick DNS Check -->
+                <div class="card" style="margin-bottom: 30px;">
+                    <h3 class="card-title" data-translate-key="quickDnsCheck" style="margin-bottom: 15px;">Quick DNS Check</h3>
+                    <div class="input-group responsive-group">
+                        <input type="text" id="quickDnsInput" class="form-control" data-translate-key="enterDomainName" placeholder="Enter domain name...">
+                        <button class="btn btn-primary" id="quickDnsBtn">
+                            <i data-lucide="network" style="width:18px;height:18px;"></i> 
+                            <span data-translate-key="checkDns">Check DNS</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <p data-translate-key="toolsDesc" style="color: var(--text-muted); margin-bottom: 20px;">
+                        Explore our curated list of tools to help you manage your domains, check DNS records, and improve your online infrastructure.
+                    </p>
+                    
+                    <div class="filter-tags" id="toolsFilterTags">
+                        <button class="filter-tag active" data-tag="all">All</button>
+                        <button class="filter-tag" data-tag="domains">Domains</button>
+                        <button class="filter-tag" data-tag="dns">DNS</button>
+                        <button class="filter-tag" data-tag="hosting">Hosting</button>
+                        <button class="filter-tag" data-tag="email">Email</button>
+                        <button class="filter-tag" data-tag="ssl">SSL</button>
+                    </div>
+
+                    <div class="gallery-grid" id="toolsGridContainer">
+                        <!-- Tools populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calendar Page -->
+            <div id="page-calendar" class="page">
+                <div class="page-title">
+                    <h2 data-translate-key="calendar">Calendar</h2>
+                    <div class="calendar-actions" style="display:flex; gap:10px;">
+                        <button class="btn btn-secondary" id="syncGCalBtn">
+                            <i data-lucide="calendar-plus"></i> 
+                            <span data-translate-key="syncAllGCal">Sync to Google</span>
+                        </button>
+                        <button class="btn btn-secondary" id="downloadIcsBtn">
+                            <i data-lucide="download"></i> 
+                            <span data-translate-key="downloadAllIcs">Download (.ics)</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="calendar-header">
+                        <button class="btn btn-secondary btn-icon-only" id="prevMonthBtn">
+                            <i data-lucide="chevron-left"></i>
+                        </button>
+                        <h3 id="currentMonthYear"></h3>
+                        <button class="btn btn-secondary btn-icon-only" id="nextMonthBtn">
+                            <i data-lucide="chevron-right"></i>
+                        </button>
+                    </div>
+                    <div class="calendar-grid" id="calendarDayNames"></div>
+                    <div class="calendar-grid" id="calendarGrid"></div>
+                </div>
+            </div>
+
+            <!-- Notifications Page -->
+            <div id="page-notifications" class="page">
+                <div class="page-title">
+                    <h2 data-translate-key="notifications">Notifications</h2>
+                </div>
+                <div class="card">
+                    <div id="notificationsList">
+                        <!-- Notifications will be injected here by JS -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Settings Page -->
+            <div id="page-settings" class="page">
+                <div class="page-title">
+                    <h2 data-translate-key="settings">Settings</h2>
+                </div>
+                <div class="settings-grid">
+                    <div class="card">
+                        <h3 class="card-title" data-translate-key="userProfile" style="margin-bottom:20px;">User Profile</h3>
+                        <form id="settingsProfileForm">
+                            <div class="form-group">
+                                <label class="form-label" data-translate-key="profilePicture">Profile Picture</label>
+                                <div class="profile-picture-controls">
+                                    <div id="settingsAvatarPreview" class="user-avatar" style="width: 80px; height: 80px; font-size: 2rem;">JD</div>
+                                    <div>
+                                        <input type="file" id="profilePicUpload" accept="image/*" style="display: none;">
+                                        <button type="button" id="uploadPicBtn" class="btn btn-secondary" data-translate-key="changePicture">Change Picture</button>
+                                        <button type="button" id="removePicBtn" class="btn btn-danger-outline" data-translate-key="remove">Remove</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="settingUsername" class="form-label" data-translate-key="username">Username</label>
+                                <input type="text" id="settingUsername" class="form-control" data-translate-key="enterYourName" placeholder="Enter your name" value="John Doe">
+                            </div>
+                            <button type="submit" class="btn btn-primary" data-translate-key="saveProfile">Save Profile</button>
+                        </form>
+                    </div>
+                    <div class="card">
+                        <h3 class="card-title" data-translate-key="appearance" style="margin-bottom:20px;">Appearance</h3>
+                        <form id="settingsAppearanceForm">
+                            <div class="form-group">
+                                <label class="form-label" data-translate-key="themeColor">Theme Accent Color</label>
+                                <div class="color-palette" id="colorPalette">
+                                    <div class="color-swatch active" data-color="#ff5011" style="background: #ff5011;"></div>
+                                    <div class="color-swatch" data-color="#10b981" style="background: #10b981;"></div>
+                                    <div class="color-swatch" data-color="#3b82f6" style="background: #3b82f6;"></div>
+                                    <div class="color-swatch" data-color="#8b5cf6" style="background: #8b5cf6;"></div>
+                                    <div class="color-swatch" data-color="#ec4899" style="background: #ec4899;"></div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="customColorPicker" class="form-label" data-translate-key="customColor">Custom Accent Color</label>
+                                <input type="color" id="customColorPicker" class="form-control" value="#ff5011" style="height: 45px; padding: 5px;">
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="main-footer">
+            <p data-translate-key="footer">Powered by Project Freedom ✊</p>
+        </footer>
+    </div>
+    
+    <!-- Persistent Notifications Container -->
+    <div id="persistent-notifications-container"></div>
+
+    <!-- Mobile Navigation -->
+    <div class="nav-overlay" id="navOverlay"></div>
+    <div class="mobile-nav" id="mobileNav">
+        <div class="mobile-nav-header">
+            <h3 style="font-family: var(--font-tech); font-weight: 400;" data-translate-key="brandName">DOMAIN VAULT</h3>
+            <div class="mobile-nav-close">
+                <i data-lucide="x"></i>
+            </div>
+        </div>
+        <!-- Sidebar menu is cloned here by JS -->
+    </div>
+    
+    <div id="toast" class="toast"></div>
+
+    <!-- Add/Edit Domain Modal -->
+    <div class="modal" id="domainModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle" data-translate-key="addNewDomain">Add New Domain</h3>
+                <div class="modal-close"><i data-lucide="x"></i></div>
+            </div>
+            <div class="modal-body">
+                <form id="domainForm">
+                    <input type="hidden" id="domainId">
+                    <div class="form-group">
+                        <label class="form-label" data-translate-key="domainName">Domain Name</label>
+                        <div class="input-group">
+                            <input type="text" id="domainName" class="form-control" placeholder="example.com" required>
+                            <button type="button" class="btn btn-secondary btn-icon-only" id="fetchWhoisBtn" title="Auto-fill via WHOIS">
+                                <i data-lucide="search"></i>
+                            </button>
+                        </div>
+                        <small id="whoisStatus" style="color: var(--primary); display: none; margin-top: 5px;"></small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" data-translate-key="provider">Provider</label>
+                        <select id="domainProvider" class="form-control" required>
+                            <option value="">Select Provider</option>
+                            <option value="Namecheap">Namecheap</option>
+                            <option value="GoDaddy">GoDaddy</option>
+                            <option value="Google Domains">Google Domains</option>
+                            <option value="Cloudflare">Cloudflare</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="otherProviderGroup" style="display: none;">
+                        <label class="form-label" data-translate-key="otherProviderName">Other Provider Name</label>
+                        <input type="text" id="otherProvider" class="form-control" data-translate-key="specifyProvider" placeholder="Specify provider">
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                        <div class="form-group">
+                            <label class="form-label" data-translate-key="purchaseDate">Purchase Date</label>
+                            <input type="date" id="purchaseDate" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" data-translate-key="renewalDate">Renewal Date</label>
+                            <input type="date" id="renewalDate" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+                        <div class="form-group">
+                            <label class="form-label" data-translate-key="purchasePrice">Purchase Price ($)</label>
+                            <input type="number" step="0.01" min="0" id="purchasePrice" class="form-control" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" data-translate-key="annualRenewalPrice">Renewal Price ($)</label>
+                            <input type="number" step="0.01" min="0" id="renewalPrice" class="form-control" placeholder="0.00" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group form-check">
+                        <input type="checkbox" id="domainAutoRenew" class="form-check-input">
+                        <label class="form-check-label" for="domainAutoRenew" data-translate-key="autoRenewalOn">Automatic Renewal is On</label>
+                    </div>
+                    
+                    <button type="submit" id="formSubmitBtn" class="btn btn-primary" style="width: 100%; font-size: 1rem; padding: 12px;" data-translate-key="addDomain">Add Domain</button>
+                </form>
+
+                <!-- Recommendations Gallery inside Modal -->
+                <div class="section-divider"></div>
+                <h4 data-translate-key="recommendedProviders" style="color: var(--text-main); margin-bottom: 10px;">Recommended Providers</h4>
+                <div class="gallery-grid" id="modalDomainRecsGrid">
+                    <!-- JS Injected Recommendations -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Provider Modal -->
+    <div class="modal" id="providerModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="providerModalTitle" data-translate-key="addNewProvider">Add New Provider</h3>
+                <div class="modal-close"><i data-lucide="x"></i></div>
+            </div>
+            <div class="modal-body">
+                <form id="providerForm">
+                    <input type="hidden" id="providerId">
+                    <div class="form-group">
+                        <label class="form-label" data-translate-key="providerName">Provider Name</label>
+                        <input type="text" id="providerName" class="form-control" placeholder="e.g., GoDaddy" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" data-translate-key="homepageUrl">Provider Homepage URL</label>
+                        <input type="url" id="providerUrl" class="form-control" placeholder="https://www.godaddy.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" data-translate-key="emailUsername">Email / Username</label>
+                        <input type="text" id="providerUser" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" data-translate-key="password">Password</label>
+                        <div class="password-wrapper">
+                            <input type="password" id="providerPass" class="form-control">
+                            <i data-lucide="eye" class="toggle-password" id="togglePassword"></i>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" data-translate-key="userIdOptional">User ID (optional)</label>
+                        <input type="text" id="providerUid" class="form-control">
+                    </div>
+                    <button type="submit" id="providerFormSubmitBtn" class="btn btn-primary" style="width: 100%; font-size: 1rem; padding: 12px;" data-translate-key="addProvider">Add Provider</button>
+                </form>
+
+                <!-- Recommendations Gallery inside Modal -->
+                <div class="section-divider"></div>
+                <h4 data-translate-key="recommendedProviders" style="color: var(--text-main); margin-bottom: 10px;">Recommended Providers</h4>
+                <div class="gallery-grid" id="modalProviderRecsGrid">
+                    <!-- JS Injected Recommendations -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Credentials Modal -->
+    <div class="modal" id="credentialsModal">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h3 id="credentialsModalTitle" data-translate-key="providerCredentials">Provider Credentials</h3>
+                <div class="modal-close"><i data-lucide="x"></i></div>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label" data-translate-key="emailUsername">Email / Username</label>
+                    <p id="credUser" class="form-control" style="background:var(--bg-hover);"></p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" data-translate-key="password">Password</label>
+                    <p id="credPass" class="form-control" style="background:var(--bg-hover); font-family:var(--font-code);"></p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" data-translate-key="userId">User ID</label>
+                    <p id="credUid" class="form-control" style="background:var(--bg-hover);"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DNS Records Modal -->
+    <div class="modal" id="dnsModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3 id="dnsModalTitle"><span data-translate-key="dnsRecords">DNS Records</span>: <span id="dnsDomainLabel" style="color:var(--primary);"></span></h3>
+                <div class="modal-close"><i data-lucide="x"></i></div>
+            </div>
+            <div class="modal-body">
+                <div id="dnsLoading" class="dns-loading" style="display: none;">
+                    <i data-lucide="loader-2" class="lucide-spin"></i>
+                    <p data-translate-key="fetching" style="margin-top:10px;">Fetching live records...</p>
+                </div>
+                <div class="table-responsive" id="dnsTableWrapper" style="display: none;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th data-translate-key="recordType">Type</th>
+                                <th data-translate-key="recordValue">Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dnsTableBody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <p id="dnsError" class="dns-loading" style="display: none; color: var(--danger);"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logout Button (hidden by default) -->
+    <button id="logoutBtn" style="display: none;">Logout</button>
+
+    <!-- Your JavaScript file (MODULE type is important!) -->
+    <script type="module" src="app.js"></script>
+    
+    <!-- Fallback for older browsers -->
+    <script>
+        // Hide loading when script fails
+        window.addEventListener('error', function() {
+            document.getElementById('loading')?.style.display = 'none';
+        });
+    </script>
+</body>
+</html>
