@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -383,7 +382,6 @@
         }
         .flip-card.is-flipped .flip-card-inner { transform: rotateY(180deg); }
         .flip-card-front, .flip-card-back {
-            position: absolute;
             width: 100%;
             height: 100%;
             -webkit-backface-visibility: hidden;
@@ -394,7 +392,15 @@
             border-radius: 12px;
             background: var(--bg-card);
         }
-        .flip-card-back { transform: rotateY(180deg); }
+        .flip-card-front {
+            position: relative; /* Stays in normal flow so card has physical height */
+        }
+        .flip-card-back { 
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: rotateY(180deg); 
+        }
 
         /* Charts and Tables */
         .charts-container {
